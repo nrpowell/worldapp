@@ -17,7 +17,7 @@ class WorldWindow(QMainWindow):
   def __init__(self):
     super().__init__()
     self.setWindowTitle("World Simulator")
-
+    self.num_turns = 0
     ''' Widgets '''
     self.central_widget = QWidget()
     self.load_widget = QWidget()
@@ -52,9 +52,6 @@ class WorldWindow(QMainWindow):
 
   ## Starting the main simulation loop ##
   def start_simulation(self):
-    # self.simulation_grid.removeWidget(self.start_simulation_button)
-    # self.start_simulation_button.deleteLater()
-    # self.start_simulation_button = None
     self.start_simulation_button.setParent(None)
     self.pause_continue_grid.addWidget(self.continue_simulation_button, 0, 0)
     self.pause_continue_grid.addWidget(self.pause_simulation_button, 0, 1)
@@ -69,9 +66,10 @@ class WorldWindow(QMainWindow):
 
   def run_simulation(self):
     while not self.simulation_state_paused:
+      self.num_turns += 1
       self.map_view.simulation_step()
       loop = QEventLoop()
-      QTimer.singleShot(20, loop.quit)
+      QTimer.singleShot(250, loop.quit)
       loop.exec_()
 
   def continue_simulation(self):
@@ -83,7 +81,7 @@ class WorldWindow(QMainWindow):
 
   def pause_simulation(self):
     self.simulation_state_paused = True
-    print("Num populations: " + str(self.map_view.map_objects.num_existing_populations()))
+    print(str(self.map_view.map_objects.num_existing_populations()) + " populations in " + str(self.num_turns) + " turns")
 
 
   def load_map(self):

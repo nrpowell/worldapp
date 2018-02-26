@@ -1,6 +1,9 @@
 import sys
 import random
+import math
 import numpy as np
+
+from scipy.stats import gamma
 
 def is_valid_world_file(filename):
   if filename.endswith(".world") or not filename:
@@ -8,16 +11,47 @@ def is_valid_world_file(filename):
   else:
     return False
 
+def choose_random_coordinate_from_list(pop_list):
+  return pop_list[np.random.randint(pop_list.shape[0], size=1), :]
+
 def create_default_influence_grid(radius):
   side_length = (radius*2) + 1
   grid = np.ones((side_length, side_length), dtype=int)
   if radius < 3:
     return grid
   else:
-    grid[radius-2:radius+2, radius-2:radius+2] = 2
-    grid[radius-1:radius+1, radius-1:radius+1] = 3
+    grid[radius-2:radius+2, radius-2:radius+2] = 3
+    grid[radius-1:radius+1, radius-1:radius+1] = 5
     grid[radius, radius] = 0
+    if not radius < 4:
+      grid[radius-3:radius+3, radius-3:radius+3] = 2
     return grid
+
+def generate_random_gammas(a, scale, size):
+  return gamma.rvs(a=a, scale=scale, size=size)
+
+
+''' Simulates the health impact of a conflict on two populations '''
+def do_conflict(pop_1, pop_2, variance=2, average_conflict_total_hit_points=5):
+  ## Initially will take the difference in health, divide by two, and set that to the mean
+  ## Further iterations will take more variables into consideration when calculating strengths
+  strength_1 = pop_1.health
+  strength_2 = pop_2.health
+
+  health_diff = pop_2.health - pop_1.health
+
+  combat_result_differential = round(np.random.normal(health_diff, math.sqrt(variance)))
+  combat_result_total = round(np.random.normal(average_conflict_total_hit_points, math.sqrt(variance)))
+
+  ''' We don't want any population gaining health from combat '''
+  pop_1_health_hit = max(0, (combat_result_total / 2.0) + combat_result_differential)
+  pop_2_health_hit = max(0, (combat_result_total / 2.0) - combat_result_differential)
+  print("Pop 1 health hit: " + str(pop_1_health_hit) + "; pop 2 health hit: " + str(pop_2_health_hit))
+
+  pop_1.health -= pop_1_health_hit
+  pop_2.health -= pop_2_health_hit
+
+
 
 ''' Gets the contribution of each trait to the RGB vector of the map image objects '''
 def rgb_contributions(num_traits):
