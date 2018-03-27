@@ -4,6 +4,7 @@ import time
 import random
 import constants
 import uuid
+import math
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -12,12 +13,34 @@ from PyQt5.QtWidgets import *
 from worldengine.cli.main import *
 from world_app_utils import *
 
-class Population(object):
-  def __init__(self, x, y, budding_frequency_initial=12, influence_range=4,
-    health_initial=7, max_health=10, growth_health_threshold=10, population_budding_timer=4,
-    conflict_search_radius=2, conflict_health_discrepancy_threshold = 2, military_organization=1):
-    self.unique_id = uuid.uuid4()
 
+class Culture(object):
+  def __init__(self, cultural_expressions = {}):
+    self.magic_word = uuid.uuid4().hex
+    self.cultural_expressions = cultural_expressions
+
+    ''' An empty cultural expression set should only be passed for the very first population '''
+    if not self.cultural_expressions:
+      self.cultural_expressions[self.magic_word] = 1.0
+
+  def predominant_culture(self):
+    current_largest_culture = ""
+    current_largest_size = 0.0
+    for key, value in self.cultural_expressions.items():
+      if value > current_largest_size:
+        current_largest_culture = key
+
+    return current_largest_culture
+
+###############################################################################################################
+###############################################################################################################
+###############################################################################################################
+
+class Population(object):
+  def __init__(self, x, y, culture, budding_frequency_initial=12, influence_range=4,
+    health_initial=5, max_health=20, growth_health_threshold=20, population_budding_timer=10,
+    conflict_search_radius=3, conflict_health_discrepancy_threshold=2, military_organization=1):
+    self.unique_id = uuid.uuid4()
     self.x = x
     self.y = y
     self.name = ""
@@ -28,9 +51,14 @@ class Population(object):
     self.budding_frequency_timer = budding_frequency_initial
     self.budding_frequency_default = budding_frequency_initial
 
+    ''' Health is an "abstraction" for population. Where we say that one population is more healthy than another, we
+    mean that it has more individuals than the other '''
     self.health = health_initial
     self.max_health = max_health
     self.growth_health_threshold = growth_health_threshold
+
+
+    self.culture = culture
 
     ## If the population is at full health for the number of turns reflected by the timer below, it buds a new pop
     self.full_health_timer = 0
@@ -40,6 +68,7 @@ class Population(object):
     self.conflict_health_discrepancy_threshold = conflict_health_discrepancy_threshold
 
     self.military_organization = military_organization
+
     ####
     # Aggression impacts the likelihood of attacking other populations, of responding physically rather than diplomatically, and of forcibly expanding - even when the odds are not in your favor
     # Aggression is heightened initially by difficult environments and very scarce resources. Aggression also increases as inter-tribe conflict increases.
@@ -85,13 +114,19 @@ class Population(object):
 
   def update_health_from_crowdedness(self, crowdedness, carrying_capacity):
     ## Crowdedness can take a negative value, in which case we decrement the population's health
-    if (self.health + (carrying_capacity - crowdedness)) >= self.max_health:
-      self.health = self.max_health
+    health_hit = crowdedness - carrying_capacity
+    if (health_hit < 0):
+      self.health = min(self.max_health, self.health + 1)
+      #print("New health = " + str(self.health))
     else:
-      self.health += (carrying_capacity - crowdedness)
+      self.health -= health_hit
+      #print("New health = " + str(self.health))
+    # if (self.health + (carrying_capacity - crowdedness)) >= self.max_health:
+    #   self.health = self.max_health
+    # else:
+    #   self.health += (carrying_capacity - crowdedness)
 
   def update_health_from_random(self, health_hit):
-    #print("Health hit is " + str(health_hit))
     self.health - health_hit
 
   def should_bud_new_pop(self):
@@ -130,7 +165,7 @@ class Population(object):
 ###############################################################################################################
 
 class Tile(object):
-  def __init__(self, x, y, biome, width=1, height=1, carrying_capacity=2):
+  def __init__(self, x, y, biome, width=1, height=1, carrying_capacity=3):
     self.x = x
     self.y = y
     self.x_diameter = width
@@ -180,11 +215,63 @@ class MapObjects():
     self.generated_file_name = "ancient_map_%s.png" % world_file[0:world_file.find(".world")]
     operation_ancient_map(self.engine_world, self.generated_file_name, 1, (142, 162, 179, 255), True, True, True, False)   
     biome_dict = {}
+    
+    self.biome_stats = {
+      'boreal desert'       : -1,
+      'boreal dry scrub'    : 0,
+      'boreal moist forest' : 1,
+      'boreal wet forest'   : 1,
+      'boreal rain forest'  : 1,
 
+      'cool temperate desert'       : 1,
+      'cool temperate desert scrub' : 2,
+      'cool temperate steppe'       : 3,
+      'cool temperate moist forest' : 4,
+      'cool temperate wet forest'   : 3,
+      'cool temperate rain forest'  : 2,
+
+      'ice' : -3,
+
+      'ocean' : 0,
+
+      'polar desert' : -3,
+
+      'subpolar dry tundra' : -2,
+      'subpolar moist tundra' : -1,
+      'subpolar wet tundra' : 0,
+      'subpolar rain tundra' : 0,
+
+      'subtropical desert' : 2,
+      'subtropical desert scrub' : 3,
+      'subtropical dry forest' : 4,
+      'subtropical moist forest' : 4,
+      'subtropical rain forest' : 3,
+      'subtropical thorn woodland' : 5,
+      'subtropical wet forest' : 3,
+
+      'tropical dry forest' : 3,
+      'tropical moist forest' : 3,
+      'tropical thorn woodland' : 4,
+      'tropical very dry forest' : 3,
+      'tropical wet forest' : 3,
+      'tropical rain forest' : 2,
+
+      'warm temperate desert' : 2,
+      'warm temperate desert scrub' : 3,
+      'warm temperate dry forest' : 4,
+      'warm temperate moist forest' : 4,
+      'warm temperate rain forest' : 3,
+      'warm temperate thorn scrub' : 4,
+      'warm temperate wet forest' : 3,
+      'warm temperate rain forest' : 3
+
+    }
+
+    
     ''' Simple matrix to keep track of the existence of populations within the map '''
     self.zero_one_matrix = np.zeros((self.width, self.height), dtype=int)
 
-    ''' Matrix to keep track of more information related to the map tiles '''
+    ''' Matrix to keep track of more detailed information related to the map tiles '''
     self.tile_matrix = np.empty((self.width, self.height), dtype=object)
     for x in range(0, map_width):
       for y in range(0, map_height):
@@ -193,7 +280,7 @@ class MapObjects():
         #   biome_dict[biome_at] = 1
         # else :
         #   biome_dict[biome_at] = biome_dict[biome_at] + 1
-        self.tile_matrix[x, y] = Tile(x, y, self.engine_world.biome_at([x, y]))
+        self.tile_matrix[x, y] = Tile(x, y, self.engine_world.biome_at([x, y]), carrying_capacity=self.biome_stats[str(self.engine_world.layers['biome'].data[y, x])])
     # for key, value in sorted(biome_dict.items()):
     #   print("Biome: " + str(key) + ", count: " + str(value))
 
@@ -201,16 +288,6 @@ class MapObjects():
   def num_existing_populations(self):
     return len(self.populations)
 
+  # biomes_carrying capacities = {
 
-###############################################################################################################
-###############################################################################################################
-###############################################################################################################
-
-# class SimulationConstants():
-#     def __init__(self):
-#       self.default_movement_radius = 2
-#       self.weak_pop_movement_radius = 3
-#       self.desperate_pop_movement_radius = 10
-
-#       self.weak_pop_movement_samples = 5
-#       self.desperate_pop_movement_samples = 20
+  # }

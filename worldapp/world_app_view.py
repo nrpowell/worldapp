@@ -1,6 +1,7 @@
 import sys
 import time
 import random
+import cProfile
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -18,6 +19,7 @@ class WorldWindow(QMainWindow):
     super().__init__()
     self.setWindowTitle("World Simulator")
     self.num_turns = 0
+
     ''' Widgets '''
     self.central_widget = QWidget()
     self.load_widget = QWidget()
@@ -33,7 +35,6 @@ class WorldWindow(QMainWindow):
 
     self.simulation_grid = QGridLayout()
     self.pause_continue_grid = QGridLayout()
-
     ''' Input fields '''
     self.map_textbox = QLineEdit(self)
 
@@ -61,15 +62,20 @@ class WorldWindow(QMainWindow):
     self.main_map_widget.setLayout(self.simulation_grid)
 
     random_land = self.map_view.map_objects.engine_world.random_land()
+    #self.map_view.place_initial_population(200, 200)
     self.map_view.place_initial_population(random_land[0], random_land[1])
     self.run_simulation()
 
   def run_simulation(self):
+    self.run_start = time.time()
     while not self.simulation_state_paused:
       self.num_turns += 1
+      if (self.num_turns % 300 == 0):
+        self.pause_simulation()
+        break
       self.map_view.simulation_step()
       loop = QEventLoop()
-      QTimer.singleShot(250, loop.quit)
+      QTimer.singleShot(0, loop.quit)
       loop.exec_()
 
   def continue_simulation(self):
@@ -81,8 +87,22 @@ class WorldWindow(QMainWindow):
 
   def pause_simulation(self):
     self.simulation_state_paused = True
+    self.map_view.redraw_populations_from_culture()
+    print("300 turns took " + str(time.time() - self.run_start) + " seconds")
     print(str(self.map_view.map_objects.num_existing_populations()) + " populations in " + str(self.num_turns) + " turns")
+    print("There have been " + str(self.map_view.total_deaths) + " deaths")
+    num_healthy = 0; num_weak = 0; num_desperate = 0; num_at_max = 0
+    for pop in self.map_view.map_objects.populations:
+      if (pop.health == pop.max_health):
+        num_at_max += 1
+      if (pop.is_healthy()):
+        num_healthy += 1
+      elif (pop.is_weak()):
+        num_weak += 1
+      elif (pop.is_desperate()):
+        num_desperate += 1
 
+    print(str(num_desperate) + " desperate; " + str(num_weak) + " weak; " + str(num_healthy) + " healthy; " + str(num_at_max) + " are at max health")
 
   def load_map(self):
     ''' All the widget elements for the main map load view '''

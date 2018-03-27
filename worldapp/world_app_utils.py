@@ -20,11 +20,12 @@ def create_default_influence_grid(radius):
   if radius < 3:
     return grid
   else:
-    grid[radius-2:radius+2, radius-2:radius+2] = 3
-    grid[radius-1:radius+1, radius-1:radius+1] = 5
-    grid[radius, radius] = 0
     if not radius < 4:
-      grid[radius-3:radius+3, radius-3:radius+3] = 2
+      grid[radius-3:radius+4, radius-3:radius+4] = 3
+
+    grid[radius-2:radius+3, radius-2:radius+3] = 5
+    grid[radius-1:radius+2, radius-1:radius+2] = 7
+    grid[radius, radius] = 0
     return grid
 
 def generate_random_gammas(a, scale, size):
@@ -32,7 +33,7 @@ def generate_random_gammas(a, scale, size):
 
 
 ''' Simulates the health impact of a conflict on two populations '''
-def do_conflict(pop_1, pop_2, variance=2, average_conflict_total_hit_points=5):
+def do_conflict(pop_1, pop_2, variance=2, average_conflict_total_hit_points=4):
   ## Initially will take the difference in health, divide by two, and set that to the mean
   ## Further iterations will take more variables into consideration when calculating strengths
   strength_1 = pop_1.health
@@ -44,9 +45,8 @@ def do_conflict(pop_1, pop_2, variance=2, average_conflict_total_hit_points=5):
   combat_result_total = round(np.random.normal(average_conflict_total_hit_points, math.sqrt(variance)))
 
   ''' We don't want any population gaining health from combat '''
-  pop_1_health_hit = max(0, (combat_result_total / 2.0) + combat_result_differential)
-  pop_2_health_hit = max(0, (combat_result_total / 2.0) - combat_result_differential)
-  print("Pop 1 health hit: " + str(pop_1_health_hit) + "; pop 2 health hit: " + str(pop_2_health_hit))
+  pop_1_health_hit = min(max(0, (combat_result_total / 2.0) + combat_result_differential), combat_result_total)
+  pop_2_health_hit = min(max(0, (combat_result_total / 2.0) - combat_result_differential), combat_result_total)
 
   pop_1.health -= pop_1_health_hit
   pop_2.health -= pop_2_health_hit
